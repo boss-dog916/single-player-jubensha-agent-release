@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background: #161114;
+  color: #f4e9df;
+  --night-base: #161114;
+  --night-panel: #23191c;
+  --night-panel-raised: #2b1e22;
+  --night-field: #2b2023;
+  --night-gold: #d5ad68;
+  --night-wine: #aa4350;
+  --night-text: #f4e9df;
+  --night-muted: #c4afa8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse at 50% -15%, rgba(112, 31, 43, 0.34), transparent 46%),
+    linear-gradient(150deg, #1b1215 0%, var(--night-base) 48%, #100d0f 100%);
+  color: var(--night-text);
+}
+
+button {
+  font: inherit;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Georgia, "Songti SC", "Noto Serif CJK SC", serif;
+}
+
+button:not(:disabled),
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--night-gold);
+  outline-offset: 2px;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  color: var(--night-text);
+  background-color: var(--night-field);
+  border-color: rgba(244, 233, 223, 0.18);
+}
+
+option {
+  background: #2b2023;
+  color: var(--night-text);
+}
+
+::selection {
+  background: rgba(213, 173, 104, 0.36);
+  color: #fff8ed;
+}
+
+* {
+  scrollbar-color: rgba(213, 173, 104, 0.48) rgba(255, 255, 255, 0.05);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(213, 173, 104, 0.48);
+  background-clip: padding-box;
+}
+
+@layer utilities {
+  /* Existing panels retain their component structure while sharing the theatre palette. */
+  [class~="bg-white"] {
+    background-color: var(--night-panel) !important;
+  }
+
+  [class~="bg-white/90"] {
+    background-color: rgba(35, 25, 28, 0.94) !important;
+    backdrop-filter: blur(12px);
+  }
+
+  [class~="bg-amber-50"] {
+    background-color: #3a2619 !important;
+  }
+
+  [class~="text-pine"] {
+    color: #df9d9a;
+  }
+
+  .pdf-reading-surface {
+    background:
+      radial-gradient(circle at 50% 30%, rgba(213, 173, 104, 0.12), transparent 58%),
+      #100d0f;
+  }
+
+  .pdf-page-frame {
+    background: #fbf7ef !important;
+    border-color: rgba(213, 173, 104, 0.34) !important;
+    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.36);
+  }
+}

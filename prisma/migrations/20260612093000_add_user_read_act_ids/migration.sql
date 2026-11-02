@@ -1,0 +1,1 @@
+ALTER TABLE "GameSession" ADD COLUMN "userReadActIds" TEXT NOT NULL DEFAULT '[]';

@@ -1,0 +1,572 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model GameSession {
+  id                  String            @id @default(cuid())
+  scriptPackageId     String?
+  runtimeDefinitionId String?
+  testMode            Boolean           @default(false)
+  runtimeScopeJson    String?
+  currentActId        String
+  currentPhase        String
+  currentShareIndex   Int               @default(0)
+  userRoleId          String?
+  aiRoleIds           String
+  userReadActIds      String            @default("[]")
+  readingReceiptsJson String            @default("[]")
+  discussionTurnCount Int               @default(0)
+  maxDiscussionTurns  Int               @default(18)
+  dmFlowCursorJson    String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  messages            Message[]
+  roleMemories        RoleMemory[]
+  publicStoryBoard    PublicStoryBoard?
+  agentRuns           AgentRun[]
+  postShareTasks      PostShareTask[]
+  shareDrafts         ShareDraft[]
+  conversation        ConversationState?
+  pendingUserTurns    PendingUserTurn[]
+  scriptPackage       ScriptPackage?    @relation(fields: [scriptPackageId], references: [id], onDelete: SetNull)
+
+  @@index([scriptPackageId])
+  @@index([runtimeDefinitionId])
+}
+
+model ConversationState {
+  gameSessionId String @id
+  revision Int @default(0)
+  status String @default("idle")
+  stage String @default("idle")
+  roleId String?
+  seedMessageId String?
+  batchIdsJson String @default("[]")
+  leaseToken String?
+  heartbeatAt DateTime?
+  actId String?
+  errorMessage String?
+  updatedAt DateTime @updatedAt
+  gameSession GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+}
+
+model PendingUserTurn {
+  sequence Int @id @default(autoincrement())
+  id String @unique @default(cuid())
+  gameSessionId String
+  clientMessageId String
+  content String
+  roleId String
+  roleName String
+  targetRoleIdsJson String
+  status String @default("queued")
+  messageId String? @unique
+  revision Int?
+  createdAt DateTime @default(now())
+  committedAt DateTime?
+  gameSession GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+  @@unique([gameSessionId, clientMessageId])
+  @@index([gameSessionId, status, sequence])
+}
+
+model ScriptPackage {
+  id              String              @id @default(cuid())
+  slug            String?             @unique
+  title           String
+  description     String?
+  status          ScriptPackageStatus @default(DRAFT)
+  scriptJson      String
+  validationJson  String?
+  sourceMetaJson  String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  assets          UploadedAsset[]
+  parsedDocuments ParsedDocument[]
+  documentSections DocumentSection[]
+  roleActBooklets RoleActBooklet[]
+  dmFlow         DMFlow?
+  runtimeDefinitions ScriptRuntimeDefinition[]
+  ingestionJobs   IngestionJob[]
+  gameSessions    GameSession[]
+}
+
+enum ScriptPackageStatus {
+  DRAFT
+  READY
+  NEEDS_REVIEW
+  FAILED
+}
+
+model UploadedAsset {
+  id              String            @id @default(cuid())
+  scriptPackageId String
+  kind            UploadedAssetKind
+  assetPurpose    UploadedAssetPurpose @default(BOTH)
+  roleName        String?
+  originalName    String
+  mimeType        String?
+  sizeBytes       Int?
+  localPath       String
+  parsedText      String?
+  parseStatus     AssetParseStatus  @default(PENDING)
+  metadataJson    String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  scriptPackage   ScriptPackage     @relation(fields: [scriptPackageId], references: [id], onDelete: Cascade)
+  parsedDocuments ParsedDocument[]
+  documentSections DocumentSection[]
+
+  @@index([scriptPackageId])
+  @@index([kind])
+  @@index([assetPurpose])
+  @@index([roleName])
+}
+
+model ParsedDocument {
+  id              String                    @id @default(cuid())
+  scriptPackageId String
+  uploadedAssetId String
+  kind            UploadedAssetKind
+  sourceType      String
+  parseStatus     ParsedDocumentParseStatus @default(PENDING)
+  pageCount       Int                       @default(0)
+  charCount       Int                       @default(0)
+  rawText         String                    @default("")
+  normalizedText  String                    @default("")
+  extractedText   String
+  blocksJson      String?
+  pagesJson       String
+  extractorName   String?
+  qualityStatus   ParsedDocumentQualityStatus @default(PASS)
+  qualityWarningsJson String?
+  errorMessage    String?
+  segmentationStatus DocumentSegmentationStatus @default(NOT_STARTED)
+  segmentationError  String?
+  documentRevision Int @default(1)
+  sectionSetRevision Int @default(1)
+  isActive Boolean @default(true)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  scriptPackage   ScriptPackage             @relation(fields: [scriptPackageId], references: [id], onDelete: Cascade)
+  uploadedAsset   UploadedAsset             @relation(fields: [uploadedAssetId], references: [id], onDelete: Cascade)
+  documentSections DocumentSection[]
+
+  @@index([scriptPackageId])
+  @@index([uploadedAssetId])
+  @@index([parseStatus])
+  @@index([qualityStatus])
+  @@index([segmentationStatus])
+}
+
+enum ParsedDocumentParseStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ParsedDocumentQualityStatus {
+  PASS
+  WARNING
+  FAILED
+}
+
+enum DocumentSegmentationStatus {
+  NOT_STARTED
+  COMPLETED
+  NEEDS_MANUAL_SEGMENTATION
+  FAILED
+}
+
+model DocumentSection {
+  id               String         @id @default(cuid())
+  scriptPackageId  String
+  uploadedAssetId  String
+  parsedDocumentId String
+  sectionType      String
+  sectionPurpose   DocumentSectionPurpose @default(CONTENT)
+  title            String
+  roleName         String?
+  actIndex         Int?
+  pageStart        Int?
+  pageEnd          Int?
+  text             String
+  metadataJson     String?
+  orderIndex       Int
+  sectionSetRevision Int @default(1)
+  isActive Boolean @default(true)
+  sourceSpanJson String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  scriptPackage    ScriptPackage  @relation(fields: [scriptPackageId], references: [id], onDelete: Cascade)
+  uploadedAsset    UploadedAsset  @relation(fields: [uploadedAssetId], references: [id], onDelete: Cascade)
+  parsedDocument   ParsedDocument @relation(fields: [parsedDocumentId], references: [id], onDelete: Cascade)
+  roleActBooklet   RoleActBooklet?
+
+  @@index([scriptPackageId])
+  @@index([uploadedAssetId])
+  @@index([parsedDocumentId])
+  @@index([sectionType])
+  @@index([sectionPurpose])
+  @@index([roleName, actIndex])
+}
+
+model DMParseArtifact {
+  id String @id @default(cuid())
+  scriptPackageId String
+  sourceSectionId String
+  sourceJson String
+  outputJson String
+  semanticJson String?
+  status String @default("active")
+  parserVersion String
+  promptVersion String
+  schemaVersion String
+  createdAt DateTime @default(now())
+
+  @@index([scriptPackageId, status])
+  @@index([sourceSectionId])
+}
+
+model ManualParseCandidate {
+  id String @id @default(cuid())
+  scriptPackageId String
+  format String @default("semantic_v2")
+  status String @default("planning")
+  sourceManifestJson String
+  scopeJson String
+  planJson String?
+  chunksJson String @default("[]")
+  semanticJson String?
+  semanticValidationJson String?
+  compiledJson String?
+  runtimeValidationJson String?
+  errorMessage String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scriptPackageId, createdAt])
+}
+
+model ManualPlanningCache {
+  cacheKey String @id
+  documentId String
+  documentRevision Int
+  sectionSetRevision Int
+  kind String
+  outputJson String
+  artifactJson String
+  createdAt DateTime @default(now())
+
+  @@index([documentId, documentRevision, sectionSetRevision])
+}
+
+model DMFlow {
+  id                 String            @id @default(cuid())
+  scriptPackageId    String            @unique
+  openingNodesJson   String            @default("[]")
+  actFlowsJson       String            @default("[]")
+  endingNodesJson    String            @default("[]")
+  sectionResultsJson String            @default("[]")
+  parseStatus        DMFlowParseStatus @default(PENDING)
+  parseError         String?
+  warningsJson       String            @default("[]")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  scriptPackage      ScriptPackage     @relation(fields: [scriptPackageId], references: [id], onDelete: Cascade)
+
+  @@index([scriptPackageId])
+  @@index([parseStatus])
+}
+
+enum DMFlowParseStatus {
+  PENDING
+  SUCCESS
+  PARTIAL_SUCCESS
+  FAILED
+}
+
+model RoleActBooklet {
+  id                 String                    @id @default(cuid())
+  scriptPackageId    String
+  roleName           String
+  actIndex           Int
+  sourceSectionId    String                    @unique
+  privateText        String                    @default("")
+  mustShareJson      String                    @default("[]")
+  mayShareJson       String                    @default("[]")
+  mustNotShareJson   String                    @default("[]")
+  emotionalPointsJson String                   @default("[]")
+  relationshipPointsJson String                @default("[]")
+  timelineFragmentsJson String                 @default("[]")
+  parseStatus        RoleActBookletParseStatus @default(PENDING)
+  parseError         String?
+  warningsJson       String                    @default("[]")
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  scriptPackage      ScriptPackage             @relation(fields: [scriptPackageId], references: [id], onDelete: Cascade)
+  sourceSection      DocumentSection           @relation(fields: [sourceSectionId], references: [id], onDelete: Cascade)
+
+  @@index([scriptPackageId])
+  @@index([roleName, actIndex])
+  @@index([parseStatus])
+}
+
+enum RoleActBookletParseStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+// Server-only authored scoring material. Never included in public definition JSON.
+model GroupMatchingKey {
+  id                  String @id @default(cuid())
+  runtimeDefinitionId String
+  choiceId            String
+  assignmentsJson     String
+  hintsJson           String @default("[]")
+  createdAt           DateTime @default(now())
+  runtimeDefinition   ScriptRuntimeDefinition @relation(fields: [runtimeDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([runtimeDefinitionId, choiceId])
+}
+
+model ScriptRuntimeDefinition {
+  matchingKeys GroupMatchingKey[]
+  id                   String                         @id @default(cuid())
+  scriptPackageId      String
+  version              Int
+  status               ScriptRuntimeDefinitionStatus @default(DRAFT)
+  definitionJson       String
+  validationReportJson String
+  compiledAt           DateTime                       @default(now())
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+  scriptPackage        ScriptPackage                  @relation(fields: [scriptPackageId], references: [id], onDelete: Cascade)
+
+  @@unique([scriptPackageId, version])
+  @@index([scriptPackageId])
+  @@index([scriptPackageId, version])
+  @@index([status])
+}
+
+enum ScriptRuntimeDefinitionStatus {
+  DRAFT
+  VALID
+  WARNING
+  INVALID
+}
+
+enum UploadedAssetPurpose {
+  PLAYER_DISPLAY
+  AI_TEXT_SOURCE
+  BOTH
+}
+
+enum DocumentSectionPurpose {
+  CONTENT
+  PLAYER_DISPLAY
+  AI_TEXT_SOURCE
+}
+
+enum UploadedAssetKind {
+  DM_MANUAL
+  ROLE_BOOKLET
+  CLUE
+  IMAGE
+  OTHER
+}
+
+enum AssetParseStatus {
+  PENDING
+  EXTRACTED
+  FAILED
+  SKIPPED
+}
+
+model IngestionJob {
+  id              String             @id @default(cuid())
+  scriptPackageId String
+  status          IngestionJobStatus @default(PENDING)
+  currentStep     String?
+  inputJson       String?
+  outputJson      String?
+  errorMessage    String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  scriptPackage   ScriptPackage      @relation(fields: [scriptPackageId], references: [id], onDelete: Cascade)
+  steps           IngestionStepRun[]
+
+  @@index([scriptPackageId])
+  @@index([status])
+}
+
+model IngestionStepRun {
+  id             String             @id @default(cuid())
+  ingestionJobId String
+  stepName       String
+  status         IngestionJobStatus @default(PENDING)
+  inputJson      String?
+  outputJson     String?
+  errorMessage   String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  ingestionJob   IngestionJob       @relation(fields: [ingestionJobId], references: [id], onDelete: Cascade)
+
+  @@index([ingestionJobId])
+  @@index([stepName])
+}
+
+enum IngestionJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Message {
+  id                     String      @id @default(cuid())
+  gameSessionId          String
+  speakerType            String
+  speakerRoleId          String?
+  speakerName            String?
+  targetRoleIds          String
+  replyToMessageId       String?
+  phase                  String
+  speechAct              String
+  content                String
+  metadata               String
+  storyBoardProcessedAt  DateTime?
+  storyBoardStatus       String      @default("not_queued")
+  storyBoardAgentRunId   String?
+  storyBoardAttemptCount Int         @default(0)
+  storyBoardClaimedAt    DateTime?
+  storyBoardError        String?
+  createdAt              DateTime    @default(now())
+  gameSession            GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+  replyToMessage         Message?    @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies                Message[]   @relation("MessageReplies")
+
+  @@index([gameSessionId, createdAt])
+  @@index([gameSessionId, storyBoardStatus, createdAt])
+  @@index([replyToMessageId])
+}
+
+model PostShareTask {
+  id                    String      @id @default(cuid())
+  gameSessionId         String
+  seedMessageId         String      @unique
+  sourceActId           String
+  sourceShareIndex      Int
+  committedShareIndex   Int
+  sharedRoleId          String
+  hasMoreShares         Boolean
+  nextRoleId            String?
+  status                String      @default("pending")
+  attemptCount          Int         @default(0)
+  claimedAt             DateTime?
+  completedAt           DateTime?
+  errorMessage          String?
+  agentRunId            String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  gameSession           GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+
+  @@index([gameSessionId, status, createdAt])
+}
+
+model ShareDraft {
+  id                    String      @id @default(cuid())
+  gameSessionId         String
+  actId                 String
+  roleId                String
+  fingerprint           String
+  status                String      @default("pending")
+  generatedContent      String?
+  metadataJson          String?
+  checkerJson           String?
+  preparationJson       String?
+  errorMessage          String?
+  attemptCount          Int         @default(0)
+  leaseToken            String?
+  agentRunId            String?
+  generationStartedAt   DateTime?
+  generationCompletedAt DateTime?
+  checkedAt             DateTime?
+  consumedAt            DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  gameSession           GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([gameSessionId, actId, roleId])
+  @@index([gameSessionId, status, createdAt])
+}
+
+model RoleMemory {
+  id            String      @id @default(cuid())
+  gameSessionId String
+  roleId        String
+  memory        String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([gameSessionId, roleId])
+  @@index([gameSessionId])
+}
+
+model PublicStoryBoard {
+  id            String      @id @default(cuid())
+  gameSessionId String      @unique
+  board         String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+}
+
+model AgentRun {
+  id                String      @id @default(cuid())
+  gameSessionId     String
+  traceId           String?
+  parentRunId       String?
+  runKind           String      @default("span")
+  agentType         String
+  roleId            String?
+  actId             String?
+  phase             String?
+  input             String
+  output            String?
+  checkerResult     String?
+  status            String
+  error             String?
+  errorMessage      String?
+  model             String?
+  latencyMs         Int?
+  ttftMs            Int?
+  promptChars       Int?
+  outputChars       Int?
+  inputTokens       Int?
+  outputTokens      Int?
+  reasoningTokens   Int?
+  cachedInputTokens Int?
+  retryCount        Int?
+  providerRequestId String?
+  startedAt         DateTime    @default(now())
+  finishedAt        DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  gameSession       GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+
+  @@index([gameSessionId, createdAt])
+  @@index([traceId, startedAt])
+  @@index([parentRunId])
+  @@index([agentType])
+  @@index([roleId])
+}

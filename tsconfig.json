@@ -1,0 +1,53 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".next-long-night-materials-20261024-1/types/**/*.ts",
+    ".next-long-night-playtest/types/**/*.ts",
+    ".next-old-house-playtest/types/**/*.ts",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    "storage/playtests/discussion-experience-browser-20261024/next-build/types/**/*.ts",
+    "storage/playtests/long-night-p2-p3-browser-20261026-2/next-build/types/**/*.ts",
+    "storage/playtests/long-night-p2-p3-live-20261026-1/next-build/types/**/*.ts",
+    "storage/playtests/long-night-p2-p3-live-20261027-1/next-build/types/**/*.ts",
+    "storage/playtests/long-night-real-act1-20261024-1/next-build/types/**/*.ts",
+    "storage/playtests/old-house-discussion-supplement-manual-20261024-1/next-build/types/**/*.ts",
+    "storage/playtests/old-house-six-act-browser-manual-20261022-1/next-build/types/**/*.ts",
+    "storage/playtests/old-house-six-act-browser-smoke-20261022-1/next-build/types/**/*.ts",
+    "storage/playtests/long-night-p2-p3-experience-live-20261028-1/next-build/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "storage"
+  ]
+}
