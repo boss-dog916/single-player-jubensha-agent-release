@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { GroupMatchingPanel } from "./GroupMatchingPanel";
-import { chatEnterAction, quotePreview } from "./playerInteraction";
+import { chatEnterAction, quotePreview, chatSubmissionType, type ShareSendMode } from "./playerInteraction";
 import type { GamePhase } from "@/src/lib/types/game";
 
 type ControlPanelProps = {
@@ -20,7 +20,9 @@ type ControlPanelProps = {
   onReadingDone: () => void;
   onAiShare: () => void;
   onUserShareTextChange: (value: string) => void;
-  onSubmitUserShare: () => void;
+  canSubmitShare?: boolean;
+  shareSendMode?: ShareSendMode;
+  onShareSendModeChange?: (mode: ShareSendMode) => void;
   onDiscussionTextChange: (value: string) => void;
   onSubmitDiscussion: () => void;
   onNextAct: () => void;
@@ -56,7 +58,9 @@ export function ControlPanel({
   onReadingDone,
   onAiShare,
   onUserShareTextChange,
-  onSubmitUserShare,
+  canSubmitShare = false,
+  shareSendMode = "auto",
+  onShareSendModeChange,
   onDiscussionTextChange,
   onSubmitDiscussion,
   onNextAct,
@@ -79,13 +83,16 @@ export function ControlPanel({
   const composing = useRef(false);
   const submitGuard = useRef(false);
   const submitDiscussion = () => {
-    if (discussionSending || submitGuard.current || !discussionText.trim()) return;
+    if (sendBlocked || submitGuard.current || !discussionText.trim()) return;
     submitGuard.current = true;
     onSubmitDiscussion();
     queueMicrotask(() => { submitGuard.current = false; });
   };
   const [finalReason, setFinalReason] = useState("");
   const actionsLocked = postShareDiscussionPending || fsmActionsLocked;
+  const sendsShare = chatSubmissionType({ canShare: canSubmitShare, replyToMessageId: replyToMessage ? "reply" : null,
+    content: discussionText, mode: shareSendMode }) === "USER_SHARE";
+  const sendBlocked = discussionSending || Boolean(sendsShare && (pending || actionsLocked));
   const performing = phase === "dm_question" && !groupMatching && textConfirmation?.kind !== "start";
   return (
     <footer className="max-h-[48dvh] overflow-y-auto shrink-0 rounded-lg border border-ink/10 bg-white/90 p-4 shadow-panel">
@@ -118,6 +125,16 @@ export function ControlPanel({
           <button type="button" onClick={onCancelReply} className="shrink-0 underline">取消回复</button>
         </div> : <p>公开发言 · 系统会按内容安排回应</p>}
       </div> : null}
+      {canSubmitShare ? <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink/70">
+        {!replyToMessage ? <label className="flex items-center gap-2">本条用途
+          <select aria-label="本条发言用途" value={shareSendMode} disabled={discussionSending}
+            className="rounded border border-ink/15 bg-paper px-2 py-1 text-ink"
+            onChange={event => onShareSendModeChange?.(event.target.value as ShareSendMode)}>
+            <option value="auto">自动判断</option><option value="share">本轮分享</option><option value="discussion">提问或补充</option>
+          </select>
+        </label> : null}
+        <span role="status">{sendsShare ? "发送后完成本轮分享，DM 将点名下一位。" : "本条作为提问、回复或补充，不结束你的分享回合。"}</span>
+      </div> : null}
       {phase !== "role_selection" && phase !== "finished" ? (
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
           <textarea
@@ -134,7 +151,7 @@ export function ControlPanel({
             onKeyDown={event => {
               const action = chatEnterAction({ key: event.key, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, altKey: event.altKey,
                 metaKey: event.metaKey, repeat: event.repeat, isComposing: event.nativeEvent.isComposing, keyCode: event.nativeEvent.keyCode },
-                composing.current, discussionText, discussionSending);
+                composing.current, discussionText, sendBlocked);
               if (action === "edit") return;
               event.preventDefault();
               if (action === "send") submitDiscussion();
@@ -143,7 +160,7 @@ export function ControlPanel({
           <PrimaryButton
             label={discussionSending ? "发送中…" : "发送"}
             onClick={submitDiscussion}
-            disabled={!discussionText.trim() || discussionSending}
+            disabled={!discussionText.trim() || sendBlocked}
           />
           {!groupMatching && !choice && !textConfirmation && (phase === "free_discussion" || phase === "act_summary") && canEnterNextAct ? <SecondaryButton label="进入下一幕阅读" onClick={onNextAct} disabled={pending || actionsLocked} /> : null}
         </div>
@@ -156,7 +173,6 @@ export function ControlPanel({
           <button type="button" className="text-sm text-pine underline disabled:opacity-40" disabled={!userShareText.trim()}
             onClick={() => { onDiscussionTextChange(userShareText); discussionInputRef.current?.focus(); }}>放入聊天输入框</button>
           <button type="button" className="text-sm text-ink/60 underline" onClick={() => onUserShareTextChange("")}>清空草稿</button>
-          {phase === "share_round" && isCurrentShareUser && !actionsLocked ? <PrimaryButton label="发送我的分享" onClick={onSubmitUserShare} disabled={!userShareText.trim() || pending} /> : null}
         </div>
       </details> : null}
       {phase === "reading" ? <div className="mt-3 flex flex-wrap items-center gap-3">

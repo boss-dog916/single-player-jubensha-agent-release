@@ -69,6 +69,13 @@ export async function runAiPlayerInternalReading({
     };
   }
 
+  // The bundled demo already has structured, scoped booklets. Like published
+  // Runtime reading, loading these facts needs no model-generated summary.
+  const demo = !session.scriptPackageId || (await prisma.scriptPackage.findUnique({
+    where: { id: session.scriptPackageId }, select: { slug: true }
+  }))?.slug === "demo-script";
+  if (demo) return loadDemoBooklet(gameSessionId, roleId, context);
+
   const readingStartedAt = new Date().toISOString();
   await updateInternalReadingRecord(gameSessionId, roleId, context.act_id, {
     status: "running",
@@ -90,7 +97,7 @@ export async function runAiPlayerInternalReading({
       schemaName: "ai_internal_reading",
       zodSchema: AiInternalReadingSchema,
       messages: buildAiPlayerInternalReadingPrompt(context),
-      mockOutput: mockOutput ?? createMockInternalReadingOutput(context)
+      mockOutput: mockOutput ?? createBookletReadingOutput(context)
     });
     agentRunId = result.agentRunId;
     const memory = await upsertRoleMemory({
@@ -136,6 +143,45 @@ export async function runAiPlayerInternalReading({
 
     throw error;
   }
+}
+
+async function loadDemoBooklet(gameSessionId: string, roleId: RoleId,
+  context: Awaited<ReturnType<typeof buildAiPlayerContext>>): Promise<RunAiPlayerInternalReadingResult> {
+  const started = new Date(), runId = randomUUID();
+  const trace = getTraceContext();
+  const row = await prisma.roleMemory.findUniqueOrThrow({ where: { gameSessionId_roleId: { gameSessionId, roleId } } });
+  const current = fromJsonValue<RoleMemory>(row.memory, createEmptyRoleMemory());
+  if (current.internal_readings?.[context.act_id]?.status === "completed")
+    return { roleId, output: createOutputFromMemory(current), memory: current,
+      agentRunId: current.internal_readings[context.act_id].agentRunId ?? "", skipped: true };
+  const output = AiInternalReadingSchema.parse({ ...createBookletReadingOutput({ ...context, roleMemory: current }),
+    private_memory_update: JSON.stringify({ roleId, actId: context.act_id, privateText: context.private_text }) });
+  const finished = new Date();
+  const memory = mergeRoleMemory(current, output, { status: "completed", agentRunId: runId,
+    errorMessage: null, startedAt: started.toISOString(), completedAt: finished.toISOString() }, context.act_id);
+  try {
+    await prisma.$transaction([
+      prisma.roleMemory.update({ where: { id: row.id, memory: row.memory, gameSession: {
+        runtimeDefinitionId: null, currentActId: context.act_id, currentPhase: { in: ["reading", "ai_internal_reading"] },
+        userRoleId: { not: roleId }
+      } }, data: { memory: toJsonInput(memory) } }),
+      prisma.agentRun.create({ data: { id: runId, gameSessionId, roleId, actId: context.act_id,
+        phase: "ai_internal_reading", agentType: "ai_player_internal_reading", runKind: "span", status: "success",
+        traceId: trace?.traceId ?? null, parentRunId: trace?.parentRunId ?? null,
+        input: toJsonInput({ source: "demo_booklet", actId: context.act_id, roleId }),
+        output: toJsonInput({ completed: true, source: "demo_booklet", llmInvoked: false, privateTextChars: context.private_text.length }),
+        startedAt: started, finishedAt: finished, latencyMs: finished.getTime() - started.getTime() } })
+    ]);
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "P2025")) throw error;
+    const latest = await getGameSession(gameSessionId), loaded = await getRoleMemory(gameSessionId, roleId);
+    const receipt = loaded.internal_readings?.[context.act_id];
+    if (latest.currentActId !== context.act_id || latest.runtimeDefinitionId || receipt?.status !== "completed")
+      throw new Error("Reading scope changed; no stale demo booklet was committed");
+    return { roleId, output: createOutputFromMemory(loaded), memory: loaded, agentRunId: receipt.agentRunId ?? "", skipped: true };
+  }
+  await prepareDraftsAfterReading(gameSessionId);
+  return { roleId, output, memory, agentRunId: runId };
 }
 
 // Published Runtime already contains the authoritative, scoped role knowledge.
@@ -307,7 +353,7 @@ function createOutputFromMemory(memory: RoleMemory): AiInternalReadingOutput {
   };
 }
 
-function createMockInternalReadingOutput(
+function createBookletReadingOutput(
   context: Awaited<ReturnType<typeof buildAiPlayerContext>>
 ): AiInternalReadingOutput {
   return {

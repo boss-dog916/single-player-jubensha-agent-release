@@ -51,6 +51,7 @@ export type PlayerPdfBookletChapter = {
   actIndex: number;
   actTitle: string;
   documents: PlayerPdfReadingDocument[];
+  text?: string;
 };
 
 export type PlayerPdfBookletView = {
@@ -150,16 +151,26 @@ export async function getPlayerPdfBookletForReading(
   });
 
   if (!session) throw new PlayerPdfReadingError("GameSession 不存在。", 404);
-  if (!session.scriptPackageId || !session.scriptPackage) {
+  const demo = !session.runtimeDefinitionId &&
+    (!session.scriptPackageId || session.scriptPackage?.slug === DEMO_SCRIPT_PACKAGE_SLUG);
+  if (!demo && (!session.scriptPackageId || !session.scriptPackage)) {
     throw new PlayerPdfReadingError("当前游戏没有关联 ScriptPackage。", 404);
-  }
-  if (!session.runtimeDefinitionId && session.scriptPackage.slug === DEMO_SCRIPT_PACKAGE_SLUG) {
-    throw new PlayerPdfReadingError("Demo 剧本使用文本读本，不使用 PDF 读本。", 404);
   }
 
   const script = await getScriptForGameSession(gameSessionId);
   const context = getCurrentReadingContext(script, session.userRoleId, session.currentActId);
   if (!context) throw new PlayerPdfReadingError("当前会话尚未选择玩家角色，不能读取角色 PDF。", 403);
+
+  // Only the bundled text demo uses this branch. Missing Runtime PDFs must not
+  // fall back to private internal booklets or bypass their branch permissions.
+  if (demo) return {
+    roleId: context.roleId, roleName: context.roleName, currentActIndex: context.currentActIndex + 1,
+    chapters: script.acts.slice(0, context.currentActIndex + 1).map((act, index) => {
+      const booklet = act.booklets.find(book => book.role_id === context.roleId);
+      if (!booklet) throw new PlayerPdfReadingError("当前角色缺少可阅读的文本剧本。", 404);
+      return { actIndex: index + 1, actTitle: act.title, documents: [], text: booklet.private_text };
+    })
+  };
 
   const candidateSections: Array<{ actIndex: number; sourceDocumentSectionId?: string; readingOrder?: number; required?: boolean }> = session.runtimeDefinitionId
     ? ((await getRuntimeReadingSourcesForGameSession({ gameSessionId, roleName: context.roleId }))?.displays ?? []).map(source => ({

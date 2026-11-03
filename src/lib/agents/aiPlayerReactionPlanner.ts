@@ -48,12 +48,30 @@ export async function planAiPlayerReaction({
   });
 
   if (result.data.role_id !== roleId) throw new Error(`Reaction Planner returned a different role: ${result.data.role_id}`);
+  let intent: ReactionIntent = { ...result.data,
+    ...(result.data.addressing && context.addressing_context ? {
+      addressing: sanitizeAddressing(result.data.addressing, context.addressing_context.publicRoster)
+    } : {}) };
+  const incoming = context.addressing_context?.preAnalysis;
+  const sender = context.latest_message.speaker_role_id;
+  // A witnessed legacy-demo failure: "我是林安女朋友" was classified as
+  // direct_question_to_self, with the reply recipient copied into directTargets.
+  // Only repair this narrow statement case. Never redirect genuine questions,
+  // group invitations, exclusions or authoritative explicit reply targets.
+  if (incoming?.addressingMode === "none" && incoming.needsPlanner && !incoming.controlMessage &&
+    incoming.directTargets.length === 0 && incoming.referencedRoles.includes(roleId) &&
+    !incoming.excludedTargets.includes(roleId) && context.latest_message.speech_act === "statement" &&
+    sender && sender !== roleId && intent.trigger_type === "direct_question_to_self" &&
+    intent.addressing?.addressingMode === "direct" && intent.addressing.directTargets.length === 1 &&
+    intent.addressing.directTargets[0] === sender && intent.target_role_ids.length === 1 && intent.target_role_ids[0] === sender) {
+    intent = { ...intent, trigger_type: "minor_relevance", addressing: {
+      addressingMode: "none", directTargets: [], referencedRoles: incoming.referencedRoles,
+      excludedTargets: incoming.excludedTargets, topic: incoming.topic
+    }, reason: `${intent.reason}；原消息为角色关联陈述，回复接收者不是原问题的提问对象。` };
+  }
   return {
     roleId,
-    intent: { ...result.data,
-      ...(result.data.addressing && context.addressing_context ? {
-        addressing: sanitizeAddressing(result.data.addressing, context.addressing_context.publicRoster)
-      } : {}) },
+    intent,
     agentRunId: result.agentRunId
   };
 }

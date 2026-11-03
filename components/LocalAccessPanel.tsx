@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-export function LocalAccessPanel({ gameId, nextPath = "/scripts" }: { gameId?: string; nextPath?: string }) {
+export function LocalAccessPanel({ gameId, nextPath = "/developer/scripts" }: { gameId?: string; nextPath?: string }) {
   const [token, setToken] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!gameId) return;
@@ -13,6 +13,13 @@ export function LocalAccessPanel({ gameId, nextPath = "/scripts" }: { gameId?: s
     enter(); window.addEventListener("hashchange", enter);
     return () => window.removeEventListener("hashchange", enter);
   }, [gameId]);
+  if (gameId) return <main className="mx-auto grid min-h-screen max-w-xl content-center gap-4 p-6">
+    <h1 className="text-2xl font-semibold">此浏览器没有本局访问凭证</h1>
+    <p>请在创建本局的浏览器中继续，或使用维护者提供的本局进入链接。其他游戏的凭证不能访问本局。</p>
+    <a className="text-brass underline" href="/scripts">返回剧本库</a>
+    <a className="text-sm underline" href="/developer">开发者入口</a>
+    {busy ? <p>正在验证本局链接……</p> : null}{error ? <p role="alert">{error}</p> : null}
+  </main>;
   return <main className="mx-auto grid min-h-screen max-w-xl content-center gap-4 p-6">
     <h1 className="text-2xl font-semibold">{gameId ? "需要本局访问凭证" : "本机开发者访问"}</h1>
     {gameId ? <p>请使用开发者提供的本局进入链接。已有浏览器凭证会自动恢复；其他游戏的凭证不能进入本局。</p> : null}

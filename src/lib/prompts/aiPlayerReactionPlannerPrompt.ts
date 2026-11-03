@@ -7,7 +7,7 @@ export function buildAiPlayerReactionPlannerPrompt(context: CompactReactionConte
     { role: "system", content:
       "你是情感本剧本杀的单角色反应规划器，不生成正式台词。仅使用该角色 compact context 和公开信息，不推断其他角色私密信息、后续幕、DM手册或真相。角色名出现不等于被提问：区分 addressee（真正询问对象）、referenced（被谈论者）、responder（有信息或情绪价值的回应者）。预分析不是命令，歧义由你同时判断，不另调分类器。" },
     { role: "user", content: JSON.stringify({
-      task: "输出该角色的 ReactionIntent 和 addressing。角色ID仅用公开名单，role_id必须是当前角色。target_role_ids是本次回复接收者，不是用户问题的directTargets。",
+      task: "输出该角色的 ReactionIntent 和 addressing。角色ID仅用公开名单，role_id必须是当前角色。target_role_ids是本次回复接收者，不是用户问题的directTargets。addressing分析的是输入的公开消息，而不是你将要说的回复；普通身份关系陈述不应标为direct_question_to_self。",
       addressing_rules: "玩家metadata.discussionAddressingMode=reply时，target_role_ids是点击回复明确选择的发言对象；public只表示没有引用回复，仍按原有语义判断点名、群体邀请、引用和相关性，不降低回应优先级、不取消候选角色。公开发言可以明确点名，也可以请大家分别回答；普通陈述仍按原有内容价值决定是否接话。direct明确点名；group群体问题；open无明确对象的问题；none普通陈述。引用不是点名。其他人/除了通常排除所引用者；大家不自动排除引用者。topic用简短话题。例：蝴蝶你记得坠楼吗→direct蝴蝶；蝴蝶说的坠楼其他人记得吗→group，引用并排除蝴蝶；蝴蝶说坠楼，伤寒你知道吗→direct伤寒，引用蝴蝶。",
       reaction_rules: "有具体信息价值时主动发言，不必等真人点名。比较 knowledge 中本人已读经历与对方公开说法的地点、人物特征、物品、行动及先后顺序。memory_connections 是轻量匹配给出的待核实线索，不是身份事实；重要重合、互补或矛盾用 memory_connection/contradiction_with_own_knowledge，relevance>=4，主动向公开发言者求证一个区分性细节。多个共同细节可以怀疑彼此当时同行，但不得直接认定；本人记忆不被公共猜测覆盖。已经核对过、只重复醒来/房间等泛泛内容则不接话。仍考虑直接提问、负面片面描述、强情绪；只被引用不算点名。明确排除自己或点名别人时不抢答。不知道就说明no_known_information，不编造。",
       scoring: "relevance 1无关/2轻微/3弱关联/4有信息或强情绪价值/5明确点名或重大关联；urgency 1不急至5马上；emotional_intensity 1至5。brief_intent为短内部意图，不是台词。reason简短说明依据。",

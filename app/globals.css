@@ -123,4 +123,8 @@ option {
     border-color: rgba(213, 173, 104, 0.34) !important;
     box-shadow: 0 18px 34px rgba(0, 0, 0, 0.36);
   }
+  .pdf-reader-hint {
+    background-color: #fbf7ef;
+    color: #374151;
+  }
 }

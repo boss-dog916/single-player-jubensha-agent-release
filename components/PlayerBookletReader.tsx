@@ -45,13 +45,14 @@ export function PlayerBookletReader({ gameId, reader, initialActIndex }: Props) 
           <div className="mt-4">{contents}</div>
         </aside>
         <section className="min-w-0 space-y-6">
-          {!reader.chapters.length ? <p className="rounded-lg border border-ink/10 bg-white/90 p-6 text-ink/70">当前尚无可阅读的 PDF 资料。</p> : null}
+          {!reader.chapters.length ? <p className="rounded-lg border border-ink/10 bg-white/90 p-6 text-ink/70">当前尚无可阅读的资料。</p> : null}
           {reader.chapters.map(chapter => <article key={chapter.actIndex} id={`booklet-act-${chapter.actIndex}`} className="scroll-mt-48 overflow-hidden rounded-lg border border-ink/10 bg-white/90 shadow-panel lg:scroll-mt-36">
             <header className="border-b border-ink/10 px-5 py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">Act {chapter.actIndex}</p>
               <h2 className="mt-1 text-xl font-semibold text-ink">{chapter.actTitle}</h2>
             </header>
             <div className="space-y-4 p-3 sm:p-4">
+              {chapter.text !== undefined ? <p className="whitespace-pre-line px-2 py-3 text-sm leading-8 text-ink/80 sm:px-4">{chapter.text}</p> : null}
               {chapter.documents.map((document, index) => <section key={document.sectionId} className="pdf-reading-surface overflow-hidden rounded-md border border-brass/20 p-2 sm:p-3">
                 {chapter.documents.length > 1 ? <p className="mb-2 px-1 text-xs text-ink/64">资料 {index + 1} · {document.originalName}</p> : null}
                 <iframe

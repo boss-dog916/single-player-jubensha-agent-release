@@ -1,5 +1,7 @@
 # Private → Public 切换前核对（2026-11-03）
 
+> 文档现状补注（2026-11-03）：当前release仓库已包含受Git追踪的[MIT LICENSE](../LICENSE)，下文“尚缺LICENSE”等表述是此前public-v1/快照检查时的历史待办，并非当前状态。安装指南现位于根目录[INSTALLATION.md](../INSTALLATION.md)。本次未重跑历史安全审计。
+
 本轮仅操作当前已推送的public-v1源码仓库，没有读取或改动原开发项目、数据库、剧本ZIP或Live；没有修改历史、提交、推送或切换GitHub可见性。下方11月1日记录保留为历史，不代表本轮状态。
 
 ## 历史及当前公开风险

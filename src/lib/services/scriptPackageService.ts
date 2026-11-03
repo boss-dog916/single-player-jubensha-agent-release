@@ -524,6 +524,13 @@ function hydrateScriptPackage(record: ScriptPackage): ScriptPackageWithScript {
     `ScriptPackage "${record.id}"`
   );
 
+  // Older demo saves omitted role_a from the share order (assuming the human
+  // always chose it). Append missing roles without shifting saved indices or
+  // rewriting the stored script. Published Runtime definitions are untouched.
+  if (record.slug === DEFAULT_SCRIPT_PACKAGE_SLUG) for (const act of script.acts) {
+    act.share_order = [...new Set([...act.share_order, ...script.roles.map(role => role.role_id)])];
+  }
+
   return {
     ...record,
     script,

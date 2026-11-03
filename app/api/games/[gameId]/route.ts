@@ -49,7 +49,7 @@ type GameEvent =
   | { type: "USER_FINISHED_READING"; sectionId?: string; actId?: string }
   | { type: "AI_INTERNAL_READING_DONE" }
   | { type: "AI_SHARE" }
-  | { type: "USER_SHARE"; content: string }
+  | { type: "USER_SHARE"; content: string; actId?: string; shareIndex?: number }
   | { type: "USER_DISCUSSION"; content: string; clientMessageId?: string; replyToMessageId?: string | null; addressingMode?: "public" | "reply" }
   | { type: "NEXT_ACT" }
   | { type: "CONFIRM_DM_TEXT"; token: string }
@@ -118,11 +118,20 @@ async function handlePOST(request: NextRequest, context: RouteContext) {
               throw error;
             }
             break;
-          case "USER_SHARE":
+          case "USER_SHARE": {
             if (await (await import("@/src/lib/services/runtimeInputPolicy")).runtimeInputPolicy(gameId))
               return { conflict: "当前请使用指定问答或结构化选择，尚未开放普通分享。" };
+            const session = await getGameSession(gameId);
+            const script = await getScriptForGameSession(gameId);
+            if (session.currentPhase !== "share_round" || !session.userRoleId ||
+              getCurrentShareRoleId(findAct(script.acts, session.currentActId), session) !== session.userRoleId ||
+              event.actId !== undefined && event.actId !== session.currentActId ||
+              event.shareIndex !== undefined && event.shareIndex !== session.currentShareIndex)
+              return { conflict: "分享回合已变化，请刷新后继续。" };
+            if (typeof event.content !== "string" || !event.content.trim()) throw new Error("分享内容不能为空。");
             await handleUserShare(gameId, event.content);
             break;
+          }
           case "USER_DISCUSSION":
             await acceptUserTurn(gameId, event.content, event.clientMessageId, event.addressingMode || event.replyToMessageId ? { mode: event.addressingMode ?? "reply", replyToMessageId: event.replyToMessageId } : undefined);
             break;

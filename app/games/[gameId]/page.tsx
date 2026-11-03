@@ -7,22 +7,24 @@ import { getGameRuntimeSnapshot } from "@/src/lib/services/gameRuntimeSnapshotSe
 import { localPlaytestManifest, localPlaytestMode } from "@/src/lib/llm/localPlaytestGuard";
 
 type GamePageProps = {
+  searchParams?: Promise<{ view?: string }>;
   params: Promise<{
     gameId: string;
   }>;
 };
 
-export default async function GamePage({ params }: GamePageProps) {
+export default async function GamePage({ params, searchParams }: GamePageProps) {
   const { gameId } = await params;
 
   const cookieHeader = (await cookies()).toString();
   if (!gameFromCookies(cookieHeader, gameId)) return <LocalAccessPanel gameId={gameId} />;
-  const developerMode = developerFromCookies(cookieHeader);
+  const developerAccess = developerFromCookies(cookieHeader);
+  const developerMode = developerAccess && (await searchParams)?.view !== "player";
   try {
     const snapshot = toPlayerSnapshot(await getGameRuntimeSnapshot(gameId));
 
     const mode = localPlaytestMode();
-    if (mode) {
+    if (mode && developerAccess) {
       const { manifest } = localPlaytestManifest();
       return <>
         <div className="border-b border-brass/30 bg-amber-50 px-6 py-3 text-sm text-ink" role="status">
@@ -35,10 +37,10 @@ export default async function GamePage({ params }: GamePageProps) {
             ? <>《如果长夜无明》完整七幕真实资料 · 第七幕不调用模型 · {mode === "mock" ? "仅验证流程，不验证模型质量" : "不设人为请求次数上限；可安全停止服务保留进度"}</>
             : <>角色本为合成测试资料，DM固定正文来自真实手册；非完整商业剧本。单局最多 {manifest.maxCalls} 次请求，到第二幕读本停止生成。</>}
         </div>
-        <PlayerEntryBootstrap gameId={gameId} /><GameLayout initialSnapshot={snapshot} developerMode={developerMode} />
+        <PlayerEntryBootstrap gameId={gameId} /><GameLayout initialSnapshot={snapshot} developerMode={developerMode} developerAccess={developerAccess} />
       </>;
     }
-    return <><PlayerEntryBootstrap gameId={gameId} /><GameLayout initialSnapshot={snapshot} developerMode={developerMode} /></>;
+    return <><PlayerEntryBootstrap gameId={gameId} /><GameLayout initialSnapshot={snapshot} developerMode={developerMode} developerAccess={developerAccess} /></>;
   } catch (error) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center p-6">
@@ -54,7 +56,7 @@ export default async function GamePage({ params }: GamePageProps) {
             {"恢复未完成，请向开发者检查本局状态。"}
           </p>
           <p className="mt-4 rounded-md bg-ember/10 p-3 text-sm leading-6 text-ember">
-            系统没有自动新开局。请回到剧本管理页选择可恢复的测试局，或在 Debug 中显式重新绑定最新 RuntimeDefinition。
+            系统没有自动新开局。请返回剧本库继续已保存的游戏，或向维护者反馈本局状态。
           </p>
         </section>
       </main>

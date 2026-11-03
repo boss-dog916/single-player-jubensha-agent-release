@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { MatchingSidebar } from "./MatchingSidebar";
 import { shareDraftKey as getShareDraftKey, loadShareDraft, saveShareDraft } from "./playerInteraction";
 import { DraggableBookletButton } from "./DraggableBookletButton";
+import { chatSubmissionType, type ShareSendMode } from "./playerInteraction";
 import { ChatPanel } from "@/components/ChatPanel";
 import { conversationPresentation, conversationPollInterval } from "@/components/conversationPresentation";
 import { ControlPanel } from "@/components/ControlPanel";
@@ -37,9 +38,10 @@ type QueuedChat = { id: string; content: string; replyToMessageId?: string | nul
 type GameLayoutProps = {
   initialSnapshot: PlayerGameSnapshot;
   developerMode?: boolean;
+  developerAccess?: boolean;
 };
 
-export function GameLayout({ initialSnapshot, developerMode = false }: GameLayoutProps) {
+export function GameLayout({ initialSnapshot, developerMode = false, developerAccess = false }: GameLayoutProps) {
   const clueRequests = useRef(new Map<string, string>());
   const [clues, setClues] = useState(initialSnapshot.clues ?? []);
   const choiceRequests = useRef(new Map<string, { requestId: string; optionId: string; reason?: string }>());
@@ -108,6 +110,7 @@ export function GameLayout({ initialSnapshot, developerMode = false }: GameLayou
   useEffect(() => setReplyToMessageId(null), [session.currentActId]);
   const [userShareText, setUserShareText] = useState("");
   const [discussionText, setDiscussionText] = useState("");
+  const [shareSendMode, setShareSendMode] = useState<ShareSendMode>("auto");
   const [discussionSending, setDiscussionSending] = useState(false);
   const discussionSubmitRef = useRef(false);
   const [pending, setPending] = useState(false);
@@ -126,6 +129,8 @@ export function GameLayout({ initialSnapshot, developerMode = false }: GameLayou
   const isCurrentShareUser = Boolean(
     currentShareRoleId && session.userRoleId && currentShareRoleId === session.userRoleId
   );
+  const canSubmitShare = session.currentPhase === "share_round" && isCurrentShareUser;
+  useEffect(() => { setShareSendMode("auto"); }, [session.currentActId, currentShareRoleId]);
   const postShareDiscussionActive =
     postShareDiscussion?.status === "pending" || postShareDiscussion?.status === "running";
   const shareDraftsActive = shareDrafts.some((draft) => draft.actId === session.currentActId &&
@@ -317,24 +322,26 @@ export function GameLayout({ initialSnapshot, developerMode = false }: GameLayou
     }
   }
 
-  async function handleSubmitUserShare() {
-    if (!session.userRoleId || !userShareText.trim()) {
-      return;
-    }
-
-    await postGameEvent({ type: "USER_SHARE", content: userShareText.trim() });
-  }
-
   async function handleSubmitDiscussion() {
     if (!session.userRoleId || !discussionText.trim() || discussionSubmitRef.current) return;
+    const submission = chatSubmissionType({ canShare: canSubmitShare, replyToMessageId, content: discussionText, mode: shareSendMode });
+    if (submission === "USER_SHARE" && (pending || conversationActive || postShareDiscussionActive || modelAvailability || outbox.length)) return;
     discussionSubmitRef.current = true;
     setDiscussionSending(true);
     try {
+      if (submission === "USER_SHARE") {
+        const submittedText = discussionText;
+        await postGameEvent({ type: "USER_SHARE", content: submittedText.trim(), actId: session.currentActId, shareIndex: session.currentShareIndex });
+        setDiscussionText(current => current === submittedText ? "" : current);
+        setShareSendMode("auto");
+        return;
+      }
       const item: QueuedChat = { id: crypto.randomUUID(), content: discussionText.trim(), replyToMessageId, addressingMode: replyToMessageId ? "reply" : "public" };
       const stored = JSON.parse(window.localStorage.getItem(`conversation-outbox:${session.gameId}`) ?? "[]");
       window.localStorage.setItem(`conversation-outbox:${session.gameId}`, JSON.stringify([...stored, item]));
       setOutbox(current => [...current, item]);
       setDiscussionText(""); setReplyToMessageId(null);
+      setShareSendMode("auto");
       await sendChat(item);
     } catch (error) { setErrorText(error instanceof Error ? error.message : "消息未发送，请重试。"); }
     finally { discussionSubmitRef.current = false; setDiscussionSending(false); }
@@ -570,6 +577,10 @@ export function GameLayout({ initialSnapshot, developerMode = false }: GameLayou
   const showRightPanel = showBoard || clues.length > 0 || developerMode || Boolean(dmFlowCursor.groupMatching);
   return (
     <div className="mx-auto flex h-[100dvh] w-full max-w-[1500px] flex-col gap-4 overflow-hidden p-4 lg:p-6">
+      {developerAccess ? <div className="flex shrink-0 justify-end text-xs text-ink/65"><a className="text-brass underline"
+        href={`/games/${session.gameId}${developerMode ? "?view=player" : ""}`}>
+        {developerMode ? "预览玩家视角" : "返回开发者视角"}
+      </a></div> : null}
       <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-rows-1 ${showRightPanel ? "grid-rows-[80px_minmax(0,1fr)_auto] lg:grid-cols-[220px_minmax(0,1fr)_340px]" : "grid-rows-[80px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)]"}`}>
         <FlowPanel
           game={currentGameView}
@@ -639,12 +650,14 @@ export function GameLayout({ initialSnapshot, developerMode = false }: GameLayou
         conversationStatus={conversation?.pending.length ? "你的消息将在当前角色说完后插入" : conversationActive ?
           conversation?.state?.roleId ? `${getRoleName(game, conversation.state.roleId)} 正在回应……` : "AI 正在回应最新消息……" : conversation?.state?.status === "failed" ? "AI 回应未完成，你可以继续发言" : ""}
         discussionText={discussionText}
+        canSubmitShare={canSubmitShare}
+        shareSendMode={shareSendMode}
+        onShareSendModeChange={setShareSendMode}
         userShareText={userShareText}
         readingActionLabel={playerPdfReading?.status === "available" && (playerPdfReading.documents?.length ?? 0) > 1 ? "我已读完当前资料" : undefined}
         onReadingDone={() => void handleReadingDone()}
         onAiShare={() => void handleAiShare()}
         onUserShareTextChange={handleShareDraftChange}
-        onSubmitUserShare={() => void handleSubmitUserShare()}
         onDiscussionTextChange={setDiscussionText}
         onSubmitDiscussion={() => void handleSubmitDiscussion()}
         onNextAct={() => void handleNextAct()}
@@ -874,8 +887,8 @@ function PlayerPdfBookletPanel({
           className="pdf-page-frame h-full min-h-[520px] w-full rounded-md border"
         />
       </div>
-      <footer className="border-t border-ink/10 px-5 py-3 text-xs leading-5 text-ink/56">
-        当前阶段使用受保护接口读取 PDF，不返回本地文件路径。浏览器内置 PDF 预览会打开起始页，请按上方页码范围阅读。
+      <footer className="pdf-reader-hint border-t border-ink/10 px-5 py-3 text-xs leading-5">
+        浏览器内置 PDF 预览若无法显示，可点击上方「新窗口打开读本」继续阅读。
       </footer>
     </main>
   );

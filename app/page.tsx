@@ -1,4 +1,3 @@
-import { NewGameButton } from "@/components/NewGameButton";
 import Link from "next/link";
 
 export default function Home() {
@@ -10,8 +9,8 @@ export default function Home() {
         </p>
         <h1 className="mt-3 text-3xl font-semibold text-ink">剧本杀 Multi-Agent v2</h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-ink/68">
-          点击新游戏后会创建一局持久化 GameSession，并进入该局专属 URL。
-          刷新页面会从数据库恢复当前进度、消息和公共故事板。
+          进入剧本库选择剧本与角色，即可开始属于你的故事。
+          同一浏览器可继续已保存的游戏，无需开发者凭证。
         </p>
       </div>
       <div className="flex flex-wrap gap-3">
@@ -21,7 +20,7 @@ export default function Home() {
         >
           进入剧本库
         </Link>
-        <NewGameButton />
+        <Link href="/developer" className="flex h-11 items-center rounded-md border border-ink/20 px-5 text-sm font-semibold hover:border-brass/60">开发者入口</Link>
       </div>
     </main>
   );

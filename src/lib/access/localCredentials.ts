@@ -61,6 +61,20 @@ export function developerFromCookies(header: string) { return Boolean(header) &&
 export function gameFromCookies(header: string, gameId: string) {
   return validGameId(gameId) && Boolean(header) && (developerFromCookies(header) || verifyCredential(cookie(header, playerCookieName(gameId)), "player", gameId));
 }
+// Library recovery is limited to signed per-game grants in this browser.
+// A developer cookie alone must not enumerate every player's saves here.
+export function playerGameIdsFromCookies(header: string) {
+  if (!header) return [];
+  const prefix = `jubensha_player_${cookieNamespace()}_`, ids = new Set<string>();
+  for (const item of header.split(";")) {
+    const part = item.trim(), equalAt = part.indexOf("=");
+    if (equalAt < 0 || !part.startsWith(prefix)) continue;
+    const id = part.slice(prefix.length, equalAt);
+    if (validGameId(id) && verifyCredential(part.slice(equalAt + 1), "player", id)) ids.add(id);
+    if (ids.size >= 50) break;
+  }
+  return [...ids];
+}
 export function isDeveloperRequest(request: Request) {
   const authorization = request.headers.get("authorization");
   if (authorization !== null) return authorization.startsWith("Bearer ") && equal(authorization.slice(7), developerSecret());
